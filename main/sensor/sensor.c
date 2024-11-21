@@ -1,3 +1,13 @@
+/**
+ * @file sensor.c
+ * @author your name (you@domain.com)
+ * @brief
+ * @version 0.1
+ * @date 2024-11-21
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -5,16 +15,18 @@
 #include "driver/uart.h"
 #include "string.h"
 #include "driver/gpio.h"
-#include "sensor.h"
+#include "sensor/sensor.h"
 
- frameData frame_data;
+ frame_data_t frame_data;
 
-bool presenceDetected()
+/* Static function*/
+
+bool presence_detected()
 {
 	return frame_data.target_type_ != 0;
 }
-
-bool stationaryTargetDetected()
+/* Global function*/
+bool stationary_target_detected()
 {
 	if((frame_data.target_type_ & 0x02) && frame_data.stationary_target_distance_ > 0 && frame_data.stationary_target_energy_ > 0)
 	{
@@ -23,7 +35,7 @@ bool stationaryTargetDetected()
 	return false;
 }
 
-uint16_t stationaryTargetDistance()
+uint16_t stationary_target_distance()
 {
 	//if(stationary_target_energy_ > 0)
 	{
@@ -32,7 +44,7 @@ uint16_t stationaryTargetDistance()
 	//return 0;
 }
 
-uint8_t stationaryTargetEnergy()
+uint8_t stationary_target_energy()
 {
 	//if(stationary_target_distance_ > 0)
 	{
@@ -41,7 +53,7 @@ uint8_t stationaryTargetEnergy()
 	//return 0;
 }
 
-bool movingTargetDetected()
+bool moving_target_detected()
 {
 	if((frame_data.target_type_ & 0x01) && frame_data.moving_target_distance_ > 0 && frame_data.moving_target_energy_ > 0)
 	{
@@ -50,7 +62,7 @@ bool movingTargetDetected()
 	return false;
 }
 
-uint16_t movingTargetDistance()
+uint16_t moving_target_distance()
 {
 	//if(moving_target_energy_ > 0)
 	{
@@ -59,16 +71,19 @@ uint16_t movingTargetDistance()
 	//return 0;
 }
 
-uint8_t movingTargetEnergy() {
-    if (frame_data.moving_target_energy_ > 100) {
+uint8_t movingTargetEnergy()
+{
+    if (frame_data.moving_target_energy_ > 100)
+    {
         return 100;  // limit target energy is 100
     }
     return frame_data.moving_target_energy_;  // show target energy in range from 0 to 100
 }
 
 
-bool check_frame_end_(uint8_t *rada) {
-    if (frame_data.ack_frame_) {
+bool check_frame_end_(uint8_t *radar) {
+    if (frame_data.ack_frame_)
+    {
         return (frame_data.radar_data_frame_[0] == 0xFD &&
                 frame_data.radar_data_frame_[1] == 0xFC &&
                 frame_data.radar_data_frame_[2] == 0xFB &&
@@ -77,7 +92,9 @@ bool check_frame_end_(uint8_t *rada) {
                 frame_data.radar_data_frame_[frame_data.radar_data_frame_position_ - 3] == 0x03 &&
                 frame_data.radar_data_frame_[frame_data.radar_data_frame_position_ - 2] == 0x02 &&
                 frame_data.radar_data_frame_[frame_data.radar_data_frame_position_ - 1] == 0x01);
-    } else {
+    }
+    else
+    {
         return (frame_data.radar_data_frame_[0] == 0xF4 &&
                 frame_data.radar_data_frame_[1] == 0xF3 &&
                 frame_data.radar_data_frame_[2] == 0xF2 &&
@@ -89,21 +106,25 @@ bool check_frame_end_(uint8_t *rada) {
     }
 }
 
-bool parse_data_frame_(uint8_t *radar_data_frame_) {
+bool parse_data_frame_(uint8_t *radar_data_frame_)
+{
     uint16_t intra_frame_data_length = radar_data_frame_[4] | (radar_data_frame_[5] << 8);
 
     // check length of data frame is valid index
-    if (frame_data.radar_data_frame_position_ != intra_frame_data_length + 10) {
+    if (frame_data.radar_data_frame_position_ != intra_frame_data_length + 10)
+    {
         return false;
     }
 
     // check certain bytes to authorize data frame
     if (frame_data.radar_data_frame_[6] == 0x02 && frame_data.radar_data_frame_[7] == 0xAA &&
-        frame_data.radar_data_frame_[17] == 0x55 && frame_data.radar_data_frame_[18] == 0x00) {
+        frame_data.radar_data_frame_[17] == 0x55 && frame_data.radar_data_frame_[18] == 0x00)
+        {
 
         frame_data.target_type_ = frame_data.radar_data_frame_[8];
 
         // extract distance and energy of target
+
         frame_data.stationary_target_distance_ = *(uint16_t*)(&frame_data.radar_data_frame_[9]);
         frame_data.moving_target_distance_ = *(uint16_t*)(&frame_data.radar_data_frame_[15]);
         frame_data.stationary_target_energy_ = frame_data.radar_data_frame_[14];
@@ -115,24 +136,28 @@ bool parse_data_frame_(uint8_t *radar_data_frame_) {
 
     return false;  // valid frame
 }
-bool read_frame_(uint8_t *data) {
-    for (size_t i = 0; i < 23; i++)
+
+#define DATA_LEN 23
+
+bool read_frame_data(uint8_t *data)
+{
+    for (size_t data_index = 0; data_index < DATA_LEN; data_index++)
     {  // Corrected to pass byte_read by reference
         // If the frame has not started, check for the frame start
         if (!frame_data.frame_started_)
         {
-            if (data[i] == 0xF4 || data[i] == 0xFD)
+            if (data[data_index] == 0xF4 || data[data_index] == 0xFD)
             {
-                frame_data.radar_data_frame_[0] = data[i];
+                frame_data.radar_data_frame_[0] = data[data_index];
                 frame_data.radar_data_frame_position_ = 1;
                 frame_data.frame_started_ = true;
-                frame_data.ack_frame_ = (data[i] == 0xFD);  // Determine the type of frame
+                frame_data.ack_frame_ = (data[data_index] == 0xFD);  // Determine the type of frame
             }
         }
          else
         {
             // Continue accumulating the frame bytes
-            frame_data.radar_data_frame_[frame_data.radar_data_frame_position_++] = data[i];
+            frame_data.radar_data_frame_[frame_data.radar_data_frame_position_++] = data[data_index];
             // After reading at least 8 bytes, verify the frame length
             if (frame_data.radar_data_frame_position_ == 8)
             {
